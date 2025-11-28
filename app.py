@@ -7,113 +7,127 @@ from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-st.set_page_config(page_title="Data Leaf – Community MVP", layout="wide")
+# --------------------------------
+# PAGE CONFIG
+# --------------------------------
+st.set_page_config(
+    page_title="Community Data – MVP",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# ------------------------
-# DUMMY DATA
-# ------------------------
+# --------------------------------
+# DEFAULT DUMMY DATA
+# --------------------------------
 
-# Buildings data
-buildings_data = [
-    {"building_id": 1, "name": "Waterloo City Hall", "building_type": "Municipal", "neighbourhood": "Central",
-     "latitude": 43.466, "longitude": -80.522, "floor_area_m2": 12000, "elec_kwh": 1500000,
-     "gas_m3": 90000, "baseline_tco2e": 420, "solar_kw_potential": 300},
-    {"building_id": 2, "name": "King Street Library", "building_type": "Institutional", "neighbourhood": "Central",
-     "latitude": 43.468, "longitude": -80.523, "floor_area_m2": 6000, "elec_kwh": 400000,
-     "gas_m3": 20000, "baseline_tco2e": 95, "solar_kw_potential": 120},
-    {"building_id": 3, "name": "Lincoln Heights School", "building_type": "Educational", "neighbourhood": "North",
-     "latitude": 43.485, "longitude": -80.528, "floor_area_m2": 11000, "elec_kwh": 500000,
-     "gas_m3": 35000, "baseline_tco2e": 160, "solar_kw_potential": 250},
-    {"building_id": 4, "name": "Tech Hub Offices", "building_type": "Commercial", "neighbourhood": "South",
-     "latitude": 43.455, "longitude": -80.515, "floor_area_m2": 9000, "elec_kwh": 800000,
-     "gas_m3": 25000, "baseline_tco2e": 190, "solar_kw_potential": 210},
-    {"building_id": 5, "name": "Maple Apartments", "building_type": "Residential", "neighbourhood": "East",
-     "latitude": 43.462, "longitude": -80.510, "floor_area_m2": 15000, "elec_kwh": 1200000,
-     "gas_m3": 100000, "baseline_tco2e": 380, "solar_kw_potential": 180},
-    {"building_id": 6, "name": "Kingsview Community Centre", "building_type": "Municipal", "neighbourhood": "North",
-     "latitude": 43.482, "longitude": -80.520, "floor_area_m2": 7000, "elec_kwh": 300000,
-     "gas_m3": 15000, "baseline_tco2e": 70, "solar_kw_potential": 90},
-]
+def get_default_buildings_df():
+    buildings_data = [
+        {"building_id": 1, "name": "Waterloo City Hall", "building_type": "Municipal", "neighbourhood": "Central",
+         "latitude": 43.466, "longitude": -80.522, "floor_area_m2": 12000, "elec_kwh": 1500000,
+         "gas_m3": 90000, "baseline_tco2e": 420, "solar_kw_potential": 300},
+        {"building_id": 2, "name": "King Street Library", "building_type": "Institutional", "neighbourhood": "Central",
+         "latitude": 43.468, "longitude": -80.523, "floor_area_m2": 6000, "elec_kwh": 400000,
+         "gas_m3": 20000, "baseline_tco2e": 95, "solar_kw_potential": 120},
+        {"building_id": 3, "name": "Lincoln Heights School", "building_type": "Educational", "neighbourhood": "North",
+         "latitude": 43.485, "longitude": -80.528, "floor_area_m2": 11000, "elec_kwh": 500000,
+         "gas_m3": 35000, "baseline_tco2e": 160, "solar_kw_potential": 250},
+        {"building_id": 4, "name": "Tech Hub Offices", "building_type": "Commercial", "neighbourhood": "South",
+         "latitude": 43.455, "longitude": -80.515, "floor_area_m2": 9000, "elec_kwh": 800000,
+         "gas_m3": 25000, "baseline_tco2e": 190, "solar_kw_potential": 210},
+        {"building_id": 5, "name": "Maple Apartments", "building_type": "Residential", "neighbourhood": "East",
+         "latitude": 43.462, "longitude": -80.510, "floor_area_m2": 15000, "elec_kwh": 1200000,
+         "gas_m3": 100000, "baseline_tco2e": 380, "solar_kw_potential": 180},
+        {"building_id": 6, "name": "Kingsview Community Centre", "building_type": "Municipal", "neighbourhood": "North",
+         "latitude": 43.482, "longitude": -80.520, "floor_area_m2": 7000, "elec_kwh": 300000,
+         "gas_m3": 15000, "baseline_tco2e": 70, "solar_kw_potential": 90},
+    ]
+    return pd.DataFrame(buildings_data)
 
-buildings_df = pd.DataFrame(buildings_data)
 
-# EV chargers data
-ev_data = [
-    {"site_id": 1, "name": "City Hall EV Lot", "neighbourhood": "Central",
-     "latitude": 43.4665, "longitude": -80.5215, "num_ports": 8, "power_kw": 150},
-    {"site_id": 2, "name": "Tech Hub EV Station", "neighbourhood": "South",
-     "latitude": 43.4545, "longitude": -80.516, "num_ports": 6, "power_kw": 120},
-    {"site_id": 3, "name": "Library EV Parking", "neighbourhood": "Central",
-     "latitude": 43.4682, "longitude": -80.5225, "num_ports": 4, "power_kw": 60},
-    {"site_id": 4, "name": "North Community EV Hub", "neighbourhood": "North",
-     "latitude": 43.484, "longitude": -80.527, "num_ports": 10, "power_kw": 200},
-]
+def get_default_ev_df():
+    ev_data = [
+        {"site_id": 1, "name": "City Hall EV Lot", "neighbourhood": "Central",
+         "latitude": 43.4665, "longitude": -80.5215, "num_ports": 8, "power_kw": 150},
+        {"site_id": 2, "name": "Tech Hub EV Station", "neighbourhood": "South",
+         "latitude": 43.4545, "longitude": -80.516, "num_ports": 6, "power_kw": 120},
+        {"site_id": 3, "name": "Library EV Parking", "neighbourhood": "Central",
+         "latitude": 43.4682, "longitude": -80.5225, "num_ports": 4, "power_kw": 60},
+        {"site_id": 4, "name": "North Community EV Hub", "neighbourhood": "North",
+         "latitude": 43.484, "longitude": -80.527, "num_ports": 10, "power_kw": 200},
+    ]
+    return pd.DataFrame(ev_data)
 
-ev_df = pd.DataFrame(ev_data)
 
-# Waste sites data
-waste_data = [
-    {"site_id": 1, "name": "North Transfer Station", "neighbourhood": "North",
-     "latitude": 43.488, "longitude": -80.53, "annual_waste_tonnes": 12000, "waste_tco2e": 5500},
-    {"site_id": 2, "name": "South Organics Depot", "neighbourhood": "South",
-     "latitude": 43.452, "longitude": -80.518, "annual_waste_tonnes": 6000, "waste_tco2e": 2100},
-]
+def get_default_waste_df():
+    waste_data = [
+        {"site_id": 1, "name": "North Transfer Station", "neighbourhood": "North",
+         "latitude": 43.488, "longitude": -80.53, "annual_waste_tonnes": 12000, "waste_tco2e": 5500},
+        {"site_id": 2, "name": "South Organics Depot", "neighbourhood": "South",
+         "latitude": 43.452, "longitude": -80.518, "annual_waste_tonnes": 6000, "waste_tco2e": 2100},
+    ]
+    return pd.DataFrame(waste_data)
 
-waste_df = pd.DataFrame(waste_data)
 
-# Neighbourhood boundaries (simple dummy polygons)
-neighbourhood_polygons = [
-    {
-        "neighbourhood": "Central",
-        "polygon": [
-            [-80.526, 43.464],
-            [-80.516, 43.464],
-            [-80.516, 43.472],
-            [-80.526, 43.472],
-        ],
-    },
-    {
-        "neighbourhood": "North",
-        "polygon": [
-            [-80.532, 43.48],
-            [-80.522, 43.48],
-            [-80.522, 43.49],
-            [-80.532, 43.49],
-        ],
-    },
-    {
-        "neighbourhood": "South",
-        "polygon": [
-            [-80.52, 43.452],
-            [-80.51, 43.452],
-            [-80.51, 43.46],
-            [-80.52, 43.46],
-        ],
-    },
-    {
-        "neighbourhood": "East",
-        "polygon": [
-            [-80.514, 43.46],
-            [-80.504, 43.46],
-            [-80.504, 43.468],
-            [-80.514, 43.468],
-        ],
-    },
-]
+def get_neighbourhood_polygons_df():
+    polygons = [
+        {
+            "neighbourhood": "Central",
+            "polygon": [
+                [-80.526, 43.464],
+                [-80.516, 43.464],
+                [-80.516, 43.472],
+                [-80.526, 43.472],
+            ],
+        },
+        {
+            "neighbourhood": "North",
+            "polygon": [
+                [-80.532, 43.48],
+                [-80.522, 43.48],
+                [-80.522, 43.49],
+                [-80.532, 43.49],
+            ],
+        },
+        {
+            "neighbourhood": "South",
+            "polygon": [
+                [-80.52, 43.452],
+                [-80.51, 43.452],
+                [-80.51, 43.46],
+                [-80.52, 43.46],
+            ],
+        },
+        {
+            "neighbourhood": "East",
+            "polygon": [
+                [-80.514, 43.46],
+                [-80.504, 43.46],
+                [-80.504, 43.468],
+                [-80.514, 43.468],
+            ],
+        },
+    ]
+    return pd.DataFrame(polygons)
 
-neighbourhood_df = pd.DataFrame(neighbourhood_polygons)
 
-# ------------------------
+# Start with defaults
+buildings_df = get_default_buildings_df()
+ev_df = get_default_ev_df()
+waste_df = get_default_waste_df()
+neighbourhood_df = get_neighbourhood_polygons_df()
+
+# --------------------------------
 # HELPER FUNCTIONS
-# ------------------------
+# --------------------------------
 
-def apply_filters(neighbourhood, building_type):
-    df = buildings_df.copy()
+def apply_filters(buildings, neighbourhood, building_type):
+    df = buildings.copy()
     if neighbourhood != "All":
         df = df[df["neighbourhood"] == neighbourhood]
     if building_type != "All":
         df = df[df["building_type"] == building_type]
     return df
+
 
 def calculate_scenario(df, retrofit_pct, solar_pct):
     retrofit_reduction_factor = 0.30    # 30% emissions reduction for retrofitted buildings
@@ -133,8 +147,9 @@ def calculate_scenario(df, retrofit_pct, solar_pct):
 
     return df, total_baseline, total_scenario, reduction, reduction_pct
 
-def generate_ai_summary(df, total_baseline, total_scenario, reduction, reduction_pct):
-    if df.empty:
+
+def generate_ai_style_summary(df, total_baseline, total_scenario, reduction, reduction_pct):
+    if df.empty or total_baseline == 0:
         return "No buildings match the current filters. Try selecting a different neighbourhood or building type."
 
     top_neighbourhoods = df.groupby("neighbourhood")["baseline_tco2e"].sum().sort_values(ascending=False)
@@ -143,18 +158,33 @@ def generate_ai_summary(df, total_baseline, total_scenario, reduction, reduction
 
     top_building = df.sort_values("baseline_tco2e", ascending=False).iloc[0]
 
-    summary = (
-        f"Under the current filters, the buildings shown emit about {total_baseline:.0f} tonnes of CO2 per year. "
-        f"With the selected retrofit and solar assumptions, this could drop to roughly {total_scenario:.0f} tonnes, "
-        f"a reduction of about {reduction_pct:.1f} percent, or {reduction:.0f} tonnes. "
-        f"The neighbourhood contributing most of these emissions is {main_neighbourhood}, at around {main_emissions:.0f} tonnes. "
-        f"The single largest building in this view is {top_building['name']}, which alone accounts for about "
-        f"{top_building['baseline_tco2e']:.0f} tonnes per year. "
-        f"For a city planner or sustainability manager, this suggests that early action in {main_neighbourhood} and "
-        f"targeted retrofits at high-impact sites such as {top_building['name']} will deliver the quickest emission reductions."
+    text = (
+        f"Under the current filters, the buildings shown emit about {total_baseline:.0f} tonnes of CO₂ per year. "
+        f"If the selected retrofit and solar measures were implemented, this could fall to roughly {total_scenario:.0f} tonnes, "
+        f"a reduction of around {reduction_pct:.1f}% or {reduction:.0f} tonnes. "
+        f"The highest-emitting neighbourhood in this view is {main_neighbourhood}, at approximately {main_emissions:.0f} tonnes per year. "
+        f"The single largest building is {top_building['name']}, which alone accounts for about "
+        f"{top_building['baseline_tco2e']:.0f} tonnes annually. "
+        f"For planners and sustainability staff, this suggests that early action in {main_neighbourhood} and targeted retrofits "
+        f"at high-impact sites such as {top_building['name']} would deliver the quickest emission reductions."
     )
+    return text
 
-    return summary
+
+def split_text(text, max_chars):
+    words = text.split()
+    lines = []
+    current = []
+    for w in words:
+        if sum(len(x) for x in current) + len(current) + len(w) > max_chars:
+            lines.append(" ".join(current))
+            current = [w]
+        else:
+            current.append(w)
+    if current:
+        lines.append(" ".join(current))
+    return lines
+
 
 def create_pdf(summary_text, scenario_df, include_images=False):
     buffer = BytesIO()
@@ -165,7 +195,7 @@ def create_pdf(summary_text, scenario_df, include_images=False):
     y = height - margin
 
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(margin, y, "Data Leaf – Community Buildings Scenario Report")
+    c.drawString(margin, y, "Community Data – Buildings Scenario Report")
     y -= 30
 
     c.setFont("Helvetica", 9)
@@ -173,7 +203,7 @@ def create_pdf(summary_text, scenario_df, include_images=False):
     y -= 20
 
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(margin, y, "AI-generated narrative summary")
+    c.drawString(margin, y, "Narrative summary")
     y -= 16
 
     c.setFont("Helvetica", 10)
@@ -218,7 +248,6 @@ def create_pdf(summary_text, scenario_df, include_images=False):
                 c.rect(margin, y - bar_height - 2, scen_len, bar_height, fill=True, stroke=False)
 
                 y -= (bar_height * 2 + gap)
-
                 c.setFillGray(0.0)
 
                 if y < margin + 100:
@@ -231,84 +260,159 @@ def create_pdf(summary_text, scenario_df, include_images=False):
     buffer.close()
     return pdf
 
-def split_text(text, max_chars):
-    words = text.split()
-    lines = []
-    current = []
-    for w in words:
-        if sum(len(x) for x in current) + len(current) + len(w) > max_chars:
-            lines.append(" ".join(current))
-            current = [w]
-        else:
-            current.append(w)
-    if current:
-        lines.append(" ".join(current))
-    return lines
 
-# ------------------------
-# SIDEBAR CONTROLS
-# ------------------------
-st.sidebar.title("Data Leaf – Community MVP")
-st.sidebar.markdown("Filter community-level data and test scenarios across buildings, EV chargers, and waste sites.")
+# --------------------------------
+# SIDEBAR – FILTERS & UPLOADS
+# --------------------------------
 
-neighbourhood_choice = st.sidebar.selectbox("Neighbourhood", ["All"] + sorted(buildings_df["neighbourhood"].unique()))
-btype_choice = st.sidebar.selectbox("Building type", ["All"] + sorted(buildings_df["building_type"].unique()))
+st.sidebar.title("Community Data – MVP")
+st.sidebar.markdown(
+    "Use these controls to explore building, EV, and waste data at the neighbourhood level, "
+    "and to test simple retrofit and solar scenarios."
+)
 
-retrofit_choice = st.sidebar.slider("Retrofit adoption (%)", 0, 60, 20)
-solar_choice = st.sidebar.slider("Solar on suitable roofs (%)", 0, 80, 30)
+# Filters
+st.sidebar.markdown("### 1. Filters")
 
-st.sidebar.markdown("---")
+neighbourhood_choice = st.sidebar.selectbox(
+    "Neighbourhood",
+    ["All"] + sorted(buildings_df["neighbourhood"].unique()),
+)
+
+btype_choice = st.sidebar.selectbox(
+    "Building type",
+    ["All"] + sorted(buildings_df["building_type"].unique()),
+)
+
+# Scenario sliders
+st.sidebar.markdown("### 2. Scenario settings")
+
+retrofit_choice = st.sidebar.slider(
+    "Retrofit adoption (%)",
+    0, 60, 20,
+    help="Approximate share of buildings that receive energy retrofits."
+)
+
+solar_choice = st.sidebar.slider(
+    "Solar on suitable roofs (%)",
+    0, 80, 30,
+    help="Approximate share of suitable roofs with solar installed."
+)
+
+# Layer toggles
+st.sidebar.markdown("### 3. Map layers")
+
 show_buildings = st.sidebar.checkbox("Show buildings", True)
 show_ev = st.sidebar.checkbox("Show EV chargers", True)
 show_waste = st.sidebar.checkbox("Show waste sites", True)
 show_neighbourhoods = st.sidebar.checkbox("Show neighbourhood boundaries", True)
 
-# ------------------------
+# Optional data upload
+st.sidebar.markdown("### 4. Optional: upload your own data")
+st.sidebar.caption("Upload CSVs with the same column names as the default templates.")
+
+b_file = st.sidebar.file_uploader("Buildings CSV", type="csv")
+if b_file is not None:
+    try:
+        tmp = pd.read_csv(b_file)
+        required_cols = {"name", "building_type", "neighbourhood", "latitude", "longitude", "baseline_tco2e"}
+        if required_cols.issubset(tmp.columns):
+            buildings_df = tmp
+            st.sidebar.success("Using uploaded buildings data.")
+        else:
+            st.sidebar.error("Buildings CSV missing required columns. Using default sample instead.")
+    except Exception:
+        st.sidebar.error("Could not read buildings CSV. Using default sample instead.")
+
+ev_file = st.sidebar.file_uploader("EV chargers CSV", type="csv")
+if ev_file is not None:
+    try:
+        tmp = pd.read_csv(ev_file)
+        required_cols = {"name", "neighbourhood", "latitude", "longitude", "num_ports"}
+        if required_cols.issubset(tmp.columns):
+            ev_df = tmp
+            st.sidebar.success("Using uploaded EV chargers data.")
+        else:
+            st.sidebar.error("EV CSV missing required columns. Using default sample instead.")
+    except Exception:
+        st.sidebar.error("Could not read EV CSV. Using default sample instead.")
+
+w_file = st.sidebar.file_uploader("Waste sites CSV", type="csv")
+if w_file is not None:
+    try:
+        tmp = pd.read_csv(w_file)
+        required_cols = {"name", "neighbourhood", "latitude", "longitude", "annual_waste_tonnes", "waste_tco2e"}
+        if required_cols.issubset(tmp.columns):
+            waste_df = tmp
+            st.sidebar.success("Using uploaded waste data.")
+        else:
+            st.sidebar.error("Waste CSV missing required columns. Using default sample instead.")
+    except Exception:
+        st.sidebar.error("Could not read waste CSV. Using default sample instead.")
+
+
+# --------------------------------
 # APPLY FILTERS + SCENARIOS
-# ------------------------
-filtered_buildings = apply_filters(neighbourhood_choice, btype_choice)
+# --------------------------------
+
+filtered_buildings = apply_filters(buildings_df, neighbourhood_choice, btype_choice)
 scenario_buildings, total_baseline, total_scenario, reduction, reduction_pct = calculate_scenario(
     filtered_buildings, retrofit_choice, solar_choice
 )
 
-ai_summary = generate_ai_summary(scenario_buildings, total_baseline, total_scenario, reduction, reduction_pct)
+ai_summary = generate_ai_style_summary(
+    scenario_buildings,
+    total_baseline,
+    total_scenario,
+    reduction,
+    reduction_pct,
+)
 
-# ------------------------
-# LAYOUT
-# ------------------------
-st.title("Data Leaf – Community Buildings, EV, and Waste MVP")
 
-tab1, tab2, tab3, tab4 = st.tabs(["Interactive Map", "Scenario Dashboard", "Insights & AI Summary", "Reports"])
+# --------------------------------
+# MAIN LAYOUT
+# --------------------------------
 
-# ------------------------
+st.title("Community Data – Neighbourhood-level MVP")
+st.markdown(
+    "This prototype brings together **buildings**, **EV chargers**, **waste sites**, and **neighbourhood boundaries** "
+    "so that municipal staff can see where emissions come from, test simple scenarios, and generate lightweight reports."
+)
+
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Interactive Map", "Scenario Dashboard", "Insights & Narrative", "Reports"]
+)
+
+# --------------------------------
 # TAB 1 – INTERACTIVE MAP
-# ------------------------
+# --------------------------------
 with tab1:
-    st.subheader("Community map: buildings, EV chargers, waste, and neighbourhoods")
+    st.subheader("Interactive map of buildings, EV chargers, waste sites, and neighbourhoods")
 
     layers = []
 
+    # Neighbourhood polygons
     if show_neighbourhoods:
         poly_df = neighbourhood_df.copy()
-        poly_df["elevation"] = 10
-
         poly_layer = pdk.Layer(
             "PolygonLayer",
             data=poly_df,
             get_polygon="polygon",
-            get_fill_color=[200, 200, 200, 40],
-            get_line_color=[80, 80, 80],
+            get_fill_color=[220, 220, 220, 60],
+            get_line_color=[120, 120, 120],
             line_width_min_pixels=1,
             pickable=True,
         )
         layers.append(poly_layer)
 
+    # Building points
     if show_buildings and not scenario_buildings.empty:
-        # colour intensity scales with baseline emissions
         max_em = scenario_buildings["baseline_tco2e"].max() or 1
         scenario_buildings = scenario_buildings.copy()
-        scenario_buildings["color_r"] = (255 * scenario_buildings["baseline_tco2e"] / max_em).clip(50, 255)
-        scenario_buildings["color"] = scenario_buildings["color_r"].apply(lambda v: [int(v), 80, 120, 200])
+        scenario_buildings["color_r"] = (255 * scenario_buildings["baseline_tco2e"] / max_em).clip(80, 255)
+        scenario_buildings["color"] = scenario_buildings["color_r"].apply(
+            lambda v: [int(v), 90, 140, 220]
+        )
 
         bldg_layer = pdk.Layer(
             "ScatterplotLayer",
@@ -320,6 +424,7 @@ with tab1:
         )
         layers.append(bldg_layer)
 
+    # EV chargers
     if show_ev:
         if neighbourhood_choice != "All":
             ev_filtered = ev_df[ev_df["neighbourhood"] == neighbourhood_choice]
@@ -332,11 +437,12 @@ with tab1:
                 data=ev_filtered,
                 get_position=["longitude", "latitude"],
                 get_radius=60,
-                get_fill_color=[0, 150, 0, 200],
+                get_fill_color=[0, 160, 0, 220],  # green-ish
                 pickable=True,
             )
             layers.append(ev_layer)
 
+    # Waste sites
     if show_waste:
         if neighbourhood_choice != "All":
             waste_filtered = waste_df[waste_df["neighbourhood"] == neighbourhood_choice]
@@ -349,11 +455,12 @@ with tab1:
                 data=waste_filtered,
                 get_position=["longitude", "latitude"],
                 get_radius=100,
-                get_fill_color=[150, 75, 0, 220],
+                get_fill_color=[170, 90, 40, 230],  # brown-ish
                 pickable=True,
             )
             layers.append(waste_layer)
 
+    # Map centre
     if not scenario_buildings.empty:
         center_lat = scenario_buildings["latitude"].mean()
         center_lon = scenario_buildings["longitude"].mean()
@@ -364,30 +471,33 @@ with tab1:
     view_state = pdk.ViewState(
         latitude=center_lat,
         longitude=center_lon,
-        zoom=12
+        zoom=12,
     )
 
     deck = pdk.Deck(
         layers=layers,
         initial_view_state=view_state,
         tooltip={"text": "{name}"},
-        map_style="mapbox://styles/mapbox/light-v9",
+        map_style="mapbox://styles/mapbox/light-v10",
     )
 
     st.pydeck_chart(deck)
 
-    st.caption("Use the checkboxes on the left to toggle buildings, EV chargers, waste sites, and neighbourhood boundaries.")
+    st.caption(
+        "Colours: buildings shaded by relative emissions (darker = higher), green points for EV chargers, "
+        "brown points for waste sites, and light polygons for neighbourhood boundaries."
+    )
 
-# ------------------------
+# --------------------------------
 # TAB 2 – SCENARIO DASHBOARD
-# ------------------------
+# --------------------------------
 with tab2:
-    st.subheader("Scenario dashboard – buildings only")
+    st.subheader("Scenario dashboard – buildings under current filters")
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Baseline emissions (tCO2e)", f"{total_baseline:,.1f}")
-    col2.metric("Scenario emissions (tCO2e)", f"{total_scenario:,.1f}")
-    col3.metric("Reduction (tCO2e)", f"{reduction:,.1f}")
+    col1.metric("Baseline emissions (tCO₂e)", f"{total_baseline:,.1f}")
+    col2.metric("Scenario emissions (tCO₂e)", f"{total_scenario:,.1f}")
+    col3.metric("Reduction (tCO₂e)", f"{reduction:,.1f}")
     col4.metric("Reduction (%)", f"{reduction_pct:,.1f}%")
 
     st.markdown("#### Emissions by building (baseline vs scenario)")
@@ -397,40 +507,59 @@ with tab2:
     else:
         st.info("No buildings to display for the current filters.")
 
-# ------------------------
-# TAB 3 – INSIGHTS & AI SUMMARY
-# ------------------------
+    with st.expander("Assumptions used in this simple scenario model"):
+        st.write(
+            "- Retrofits are assumed to cut emissions from affected buildings by about **30%**.\n"
+            "- Solar is assumed to offset about **20%** of electricity-related emissions on participating roofs.\n"
+            "- These assumptions are placeholders and can be tuned to match your real programs."
+        )
+
+# --------------------------------
+# TAB 3 – INSIGHTS & NARRATIVE
+# --------------------------------
 with tab3:
-    st.subheader("Insights for planners and sustainability teams")
+    st.subheader("Insights for planners and sustainability staff")
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.markdown("#### Highest-emitting buildings")
-        st.dataframe(
-            scenario_buildings.sort_values("baseline_tco2e", ascending=False)[
-                ["name", "neighbourhood", "building_type", "baseline_tco2e", "scenario_tco2e"]
-            ].head(5)
-        )
+        if not scenario_buildings.empty:
+            st.dataframe(
+                scenario_buildings.sort_values("baseline_tco2e", ascending=False)[
+                    ["name", "neighbourhood", "building_type", "baseline_tco2e", "scenario_tco2e"]
+                ].head(5)
+            )
+        else:
+            st.info("No building emissions to display under the current filters.")
 
         st.markdown("#### EV charger coverage by neighbourhood")
-        ev_counts = ev_df.groupby("neighbourhood")["num_ports"].sum().reset_index()
-        st.dataframe(ev_counts)
+        if not ev_df.empty:
+            ev_counts = ev_df.groupby("neighbourhood")["num_ports"].sum().reset_index()
+            st.dataframe(ev_counts)
+        else:
+            st.info("No EV charger data available.")
 
     with col2:
         st.markdown("#### Waste sites")
-        st.dataframe(waste_df[["name", "neighbourhood", "annual_waste_tonnes", "waste_tco2e"]])
+        if not waste_df.empty:
+            st.dataframe(waste_df[["name", "neighbourhood", "annual_waste_tonnes", "waste_tco2e"]])
+        else:
+            st.info("No waste site data available.")
 
-        st.markdown("#### AI-style narrative summary")
+        st.markdown("#### Narrative summary")
         st.write(ai_summary)
 
-# ------------------------
+# --------------------------------
 # TAB 4 – REPORTS
-# ------------------------
+# --------------------------------
 with tab4:
     st.subheader("Downloadable reports")
 
-    st.markdown("Generate simple PDF reports based on the current filters and scenario assumptions.")
+    st.markdown(
+        "Generate simple PDF reports based on the current filters and scenario assumptions. "
+        "These can be used as starting points for staff updates or briefing notes."
+    )
 
     col_a, col_b = st.columns(2)
 
@@ -440,7 +569,7 @@ with tab4:
             st.download_button(
                 label="Download text-only PDF",
                 data=pdf_bytes,
-                file_name="data_leaf_report_text_only.pdf",
+                file_name="community_data_report_text_only.pdf",
                 mime="application/pdf",
             )
 
@@ -450,12 +579,10 @@ with tab4:
             st.download_button(
                 label="Download PDF with visuals",
                 data=pdf_bytes_img,
-                file_name="data_leaf_report_with_visuals.pdf",
+                file_name="community_data_report_with_visuals.pdf",
                 mime="application/pdf",
             )
 
-    st.markdown("---")
     st.markdown(
-        "These PDFs are intentionally lightweight for a pilot. "
-        "In a production version, they could be expanded into full council-ready or staff-ready reporting templates."
+        "_In a future version, these templates could be aligned with your specific staff and council reporting formats._"
     )
