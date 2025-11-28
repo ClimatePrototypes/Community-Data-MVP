@@ -1,14 +1,13 @@
-import os
+import streamlit as st
+import pandas as pd
+import pydeck as pdk
 from io import BytesIO
 from datetime import datetime
 
-import pandas as pd
-import pydeck as pdk
-import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-st.set_page_config(page_title="Community Data – MVP", layout="wide")
+st.set_page_config(page_title="Data Leaf – Community MVP", layout="wide")
 
 # ------------------------
 # DUMMY DATA
@@ -116,7 +115,6 @@ def apply_filters(neighbourhood, building_type):
         df = df[df["building_type"] == building_type]
     return df
 
-
 def calculate_scenario(df, retrofit_pct, solar_pct):
     retrofit_reduction_factor = 0.30    # 30% emissions reduction for retrofitted buildings
     solar_offset_factor = 0.20          # 20% electricity offset from solar installs
@@ -135,90 +133,28 @@ def calculate_scenario(df, retrofit_pct, solar_pct):
 
     return df, total_baseline, total_scenario, reduction, reduction_pct
 
-
-def generate_fallback_summary(df, total_baseline, total_scenario, reduction, reduction_pct):
+def generate_ai_summary(df, total_baseline, total_scenario, reduction, reduction_pct):
     if df.empty:
         return "No buildings match the current filters. Try selecting a different neighbourhood or building type."
 
     top_neighbourhoods = df.groupby("neighbourhood")["baseline_tco2e"].sum().sort_values(ascending=False)
     main_neighbourhood = top_neighbourhoods.index[0]
     main_emissions = top_neighbourhoods.iloc[0]
+
     top_building = df.sort_values("baseline_tco2e", ascending=False).iloc[0]
 
-    return (
+    summary = (
         f"Under the current filters, the buildings shown emit about {total_baseline:.0f} tonnes of CO2 per year. "
         f"With the selected retrofit and solar assumptions, this could drop to roughly {total_scenario:.0f} tonnes, "
         f"a reduction of about {reduction_pct:.1f} percent, or {reduction:.0f} tonnes. "
         f"The neighbourhood contributing most of these emissions is {main_neighbourhood}, at around {main_emissions:.0f} tonnes. "
         f"The single largest building in this view is {top_building['name']}, which alone accounts for about "
         f"{top_building['baseline_tco2e']:.0f} tonnes per year. "
-        f"This suggests that early action in {main_neighbourhood} and targeted retrofits at high-impact sites such as "
-        f"{top_building['name']} will deliver the quickest emission reductions."
+        f"For a city planner or sustainability manager, this suggests that early action in {main_neighbourhood} and "
+        f"targeted retrofits at high-impact sites such as {top_building['name']} will deliver the quickest emission reductions."
     )
 
-
-def generate_ai_summary(df, total_baseline, total_scenario, reduction, reduction_pct):
-    """
-    If OPENAI_API_KEY + openai library are available, use the OpenAI API.
-    Otherwise fall back to a simple internal summary so the app never breaks.
-    """
-    try:
-        from openai import OpenAI  # requires `openai` in requirements.txt
-        client = OpenAI()  # uses OPENAI_API_KEY from env or Streamlit secrets
-
-        # Build a compact prompt
-        prompt = (
-            "You are a municipal climate and sustainability analyst. "
-            "Write a short, plain-language paragraph (max 220 words) summarizing the current emissions scenario "
-            "for a city planner and sustainability manager.\n\n"
-            f"Total baseline emissions (tCO2e): {total_baseline:.1f}\n"
-            f"Scenario emissions (tCO2e): {total_scenario:.1f}\n"
-            f"Reduction (tCO2e): {reduction:.1f}\n"
-            f"Reduction (%): {reduction_pct:.1f}\n\n"
-            "Dataset (each row = building):\n"
-        )
-
-        small_df = df[["name", "neighbourhood", "building_type", "baseline_tco2e", "scenario_tco2e"]].head(10)
-        prompt += small_df.to_csv(index=False)
-
-        prompt += (
-            "\nFocus on: which neighbourhoods or building types stand out; "
-            "what this means for near-term retrofit and solar decisions; "
-            "and how this view could support staff or council reporting. "
-            "Avoid jargon and keep the tone clear and practical."
-        )
-
-        # Use Responses API (current recommended pattern) :contentReference[oaicite:0]{index=0}
-        response = client.responses.create(
-            model="gpt-5.1-mini",
-            input=prompt,
-            max_output_tokens=300,
-        )
-
-        # Extract plain text
-        first_output = response.output[0]
-        first_content = first_output.content[0]
-        return getattr(first_content, "text", str(first_content))
-
-    except Exception:
-        # Any issue (no key, library missing, etc.) → safe fallback
-        return generate_fallback_summary(df, total_baseline, total_scenario, reduction, reduction_pct)
-
-
-def split_text(text, max_chars):
-    words = text.split()
-    lines = []
-    current = []
-    for w in words:
-        if sum(len(x) for x in current) + len(current) + len(w) > max_chars:
-            lines.append(" ".join(current))
-            current = [w]
-        else:
-            current.append(w)
-    if current:
-        lines.append(" ".join(current))
-    return lines
-
+    return summary
 
 def create_pdf(summary_text, scenario_df, include_images=False):
     buffer = BytesIO()
@@ -229,7 +165,7 @@ def create_pdf(summary_text, scenario_df, include_images=False):
     y = height - margin
 
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(margin, y, "Community Data – Buildings Scenario Report")
+    c.drawString(margin, y, "Data Leaf – Community Buildings Scenario Report")
     y -= 30
 
     c.setFont("Helvetica", 9)
@@ -282,6 +218,7 @@ def create_pdf(summary_text, scenario_df, include_images=False):
                 c.rect(margin, y - bar_height - 2, scen_len, bar_height, fill=True, stroke=False)
 
                 y -= (bar_height * 2 + gap)
+
                 c.setFillGray(0.0)
 
                 if y < margin + 100:
@@ -294,10 +231,24 @@ def create_pdf(summary_text, scenario_df, include_images=False):
     buffer.close()
     return pdf
 
+def split_text(text, max_chars):
+    words = text.split()
+    lines = []
+    current = []
+    for w in words:
+        if sum(len(x) for x in current) + len(current) + len(w) > max_chars:
+            lines.append(" ".join(current))
+            current = [w]
+        else:
+            current.append(w)
+    if current:
+        lines.append(" ".join(current))
+    return lines
+
 # ------------------------
 # SIDEBAR CONTROLS
 # ------------------------
-st.sidebar.title("Community Data – MVP")
+st.sidebar.title("Data Leaf – Community MVP")
 st.sidebar.markdown("Filter community-level data and test scenarios across buildings, EV chargers, and waste sites.")
 
 neighbourhood_choice = st.sidebar.selectbox("Neighbourhood", ["All"] + sorted(buildings_df["neighbourhood"].unique()))
@@ -311,7 +262,6 @@ show_buildings = st.sidebar.checkbox("Show buildings", True)
 show_ev = st.sidebar.checkbox("Show EV chargers", True)
 show_waste = st.sidebar.checkbox("Show waste sites", True)
 show_neighbourhoods = st.sidebar.checkbox("Show neighbourhood boundaries", True)
-show_heatmap = st.sidebar.checkbox("Show emissions heatmap (buildings)", False)
 
 # ------------------------
 # APPLY FILTERS + SCENARIOS
@@ -326,7 +276,7 @@ ai_summary = generate_ai_summary(scenario_buildings, total_baseline, total_scena
 # ------------------------
 # LAYOUT
 # ------------------------
-st.title("Community Data – Buildings, EV, Waste, and Scenarios")
+st.title("Data Leaf – Community Buildings, EV, and Waste MVP")
 
 tab1, tab2, tab3, tab4 = st.tabs(["Interactive Map", "Scenario Dashboard", "Insights & AI Summary", "Reports"])
 
@@ -334,11 +284,10 @@ tab1, tab2, tab3, tab4 = st.tabs(["Interactive Map", "Scenario Dashboard", "Insi
 # TAB 1 – INTERACTIVE MAP
 # ------------------------
 with tab1:
-    st.subheader("Community map: buildings, EV chargers, waste, neighbourhoods, and heatmap")
+    st.subheader("Community map: buildings, EV chargers, waste, and neighbourhoods")
 
     layers = []
 
-    # Neighbourhood polygons
     if show_neighbourhoods:
         poly_df = neighbourhood_df.copy()
         poly_df["elevation"] = 10
@@ -354,19 +303,8 @@ with tab1:
         )
         layers.append(poly_layer)
 
-    # Heatmap of building emissions (overlays on top of polygons)
-    if show_heatmap and not scenario_buildings.empty:
-        heat_layer = pdk.Layer(
-            "HeatmapLayer",
-            data=scenario_buildings,
-            get_position=["longitude", "latitude"],
-            get_weight="baseline_tco2e",
-            radiusPixels=60,
-        )
-        layers.append(heat_layer)
-
-    # Building points
     if show_buildings and not scenario_buildings.empty:
+        # colour intensity scales with baseline emissions
         max_em = scenario_buildings["baseline_tco2e"].max() or 1
         scenario_buildings = scenario_buildings.copy()
         scenario_buildings["color_r"] = (255 * scenario_buildings["baseline_tco2e"] / max_em).clip(50, 255)
@@ -382,7 +320,6 @@ with tab1:
         )
         layers.append(bldg_layer)
 
-    # EV chargers
     if show_ev:
         if neighbourhood_choice != "All":
             ev_filtered = ev_df[ev_df["neighbourhood"] == neighbourhood_choice]
@@ -400,7 +337,6 @@ with tab1:
             )
             layers.append(ev_layer)
 
-    # Waste sites
     if show_waste:
         if neighbourhood_choice != "All":
             waste_filtered = waste_df[waste_df["neighbourhood"] == neighbourhood_choice]
@@ -418,7 +354,6 @@ with tab1:
             )
             layers.append(waste_layer)
 
-    # Map centre
     if not scenario_buildings.empty:
         center_lat = scenario_buildings["latitude"].mean()
         center_lon = scenario_buildings["longitude"].mean()
@@ -440,7 +375,8 @@ with tab1:
     )
 
     st.pydeck_chart(deck)
-    st.caption("Use the checkboxes on the left to toggle buildings, heatmap, EV chargers, waste sites, and neighbourhood boundaries.")
+
+    st.caption("Use the checkboxes on the left to toggle buildings, EV chargers, waste sites, and neighbourhood boundaries.")
 
 # ------------------------
 # TAB 2 – SCENARIO DASHBOARD
@@ -504,7 +440,7 @@ with tab4:
             st.download_button(
                 label="Download text-only PDF",
                 data=pdf_bytes,
-                file_name="community_data_report_text_only.pdf",
+                file_name="data_leaf_report_text_only.pdf",
                 mime="application/pdf",
             )
 
@@ -514,7 +450,7 @@ with tab4:
             st.download_button(
                 label="Download PDF with visuals",
                 data=pdf_bytes_img,
-                file_name="community_data_report_with_visuals.pdf",
+                file_name="data_leaf_report_with_visuals.pdf",
                 mime="application/pdf",
             )
 
@@ -523,4 +459,3 @@ with tab4:
         "These PDFs are intentionally lightweight for a pilot. "
         "In a production version, they could be expanded into full council-ready or staff-ready reporting templates."
     )
-
