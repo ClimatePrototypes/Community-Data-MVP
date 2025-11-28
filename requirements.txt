@@ -1,6 +1,6 @@
 streamlit
 pandas
-pydeck
+folium
+streamlit-folium
 reportlab
-openai
 
