@@ -120,6 +120,12 @@ neighbourhood_df = get_neighbourhood_polygons_df()
 # HELPER FUNCTIONS
 # --------------------------------
 
+ELEC_EMISSION_FACTOR = 0.0002   # tCO2e per kWh (example)
+GAS_EMISSION_FACTOR = 0.0019    # tCO2e per m3 (example)
+ELEC_COST = 0.15                # $/kWh (example)
+GAS_COST = 0.40                 # $/m3 (example)
+
+
 def apply_filters(buildings, neighbourhood, building_type):
     df = buildings.copy()
     if neighbourhood != "All":
@@ -130,14 +136,49 @@ def apply_filters(buildings, neighbourhood, building_type):
 
 
 def calculate_scenario(df, retrofit_pct, solar_pct):
-    retrofit_reduction_factor = 0.30    # 30% emissions reduction for retrofitted buildings
-    solar_offset_factor = 0.20          # 20% electricity offset from solar installs
-
+    """
+    Calculate scenario emissions and costs, using gas vs electricity split where possible.
+    """
     df = df.copy()
-    df["scenario_tco2e"] = df["baseline_tco2e"] * (
-        1 - (retrofit_pct / 100) * retrofit_reduction_factor
-    ) * (
-        1 - (solar_pct / 100) * solar_offset_factor
+
+    # default: no energy columns
+    df["elec_kwh"] = df.get("elec_kwh", 0).fillna(0)
+    df["gas_m3"] = df.get("gas_m3", 0).fillna(0)
+
+    # estimate emission breakdown (gas vs electricity), scaled to match baseline_tco2e
+    est_elec = df["elec_kwh"] * ELEC_EMISSION_FACTOR
+    est_gas = df["gas_m3"] * GAS_EMISSION_FACTOR
+    total_est = est_elec + est_gas
+
+    df["baseline_elec_t"] = 0.0
+    df["baseline_gas_t"] = 0.0
+
+    mask = total_est > 0
+    df.loc[mask, "baseline_elec_t"] = df.loc[mask, "baseline_tco2e"] * (est_elec[mask] / total_est[mask])
+    df.loc[mask, "baseline_gas_t"] = df.loc[mask, "baseline_tco2e"] * (est_gas[mask] / total_est[mask])
+
+    # for rows with no energy info, treat all as gas (just so scenarios still run)
+    mask_no_energy = ~mask
+    df.loc[mask_no_energy, "baseline_gas_t"] = df.loc[mask_no_energy, "baseline_tco2e"]
+
+    # cost baseline
+    df["baseline_cost"] = df["elec_kwh"] * ELEC_COST + df["gas_m3"] * GAS_COST
+
+    # scenario adjustments
+    retrofit_reduction_factor = 0.30  # on gas emissions
+    solar_offset_factor = 0.20        # on electricity emissions
+
+    gas_factor = 1 - (retrofit_pct / 100) * retrofit_reduction_factor
+    elec_factor = 1 - (solar_pct / 100) * solar_offset_factor
+
+    df["scenario_gas_t"] = df["baseline_gas_t"] * gas_factor
+    df["scenario_elec_t"] = df["baseline_elec_t"] * elec_factor
+    df["scenario_tco2e"] = df["scenario_gas_t"] + df["scenario_elec_t"]
+
+    # scenario costs (same logic applied to energy use)
+    df["scenario_cost"] = (
+        df["elec_kwh"] * elec_factor * ELEC_COST
+        + df["gas_m3"] * gas_factor * GAS_COST
     )
 
     total_baseline = df["baseline_tco2e"].sum()
@@ -145,7 +186,22 @@ def calculate_scenario(df, retrofit_pct, solar_pct):
     reduction = total_baseline - total_scenario
     reduction_pct = (reduction / total_baseline) * 100 if total_baseline else 0
 
-    return df, total_baseline, total_scenario, reduction, reduction_pct
+    total_cost_baseline = df["baseline_cost"].sum()
+    total_cost_scenario = df["scenario_cost"].sum()
+    cost_savings = total_cost_baseline - total_cost_scenario
+    cost_savings_pct = (cost_savings / total_cost_baseline) * 100 if total_cost_baseline else 0
+
+    return (
+        df,
+        total_baseline,
+        total_scenario,
+        reduction,
+        reduction_pct,
+        total_cost_baseline,
+        total_cost_scenario,
+        cost_savings,
+        cost_savings_pct,
+    )
 
 
 def generate_ai_style_summary(df, total_baseline, total_scenario, reduction, reduction_pct):
@@ -162,7 +218,7 @@ def generate_ai_style_summary(df, total_baseline, total_scenario, reduction, red
         f"Under the current filters, the buildings shown emit about {total_baseline:.0f} tonnes of CO₂ per year. "
         f"If the selected retrofit and solar measures were implemented, this could fall to roughly {total_scenario:.0f} tonnes, "
         f"a reduction of around {reduction_pct:.1f}% or {reduction:.0f} tonnes. "
-        f"The highest-emitting neighbourhood in this view is {main_neighbourhood}, at approximately {main_emissions:.0f} tonnes per year. "
+        f"In this view, the highest-emitting neighbourhood is {main_neighbourhood}, at approximately {main_emissions:.0f} tonnes per year. "
         f"The single largest building is {top_building['name']}, which alone accounts for about "
         f"{top_building['baseline_tco2e']:.0f} tonnes annually. "
         f"For planners and sustainability staff, this suggests that early action in {main_neighbourhood} and targeted retrofits "
@@ -267,8 +323,7 @@ def create_pdf(summary_text, scenario_df, include_images=False):
 
 st.sidebar.title("Community Data – MVP")
 st.sidebar.markdown(
-    "Use these controls to explore building, EV, and waste data at the neighbourhood level, "
-    "and to test simple retrofit and solar scenarios."
+    "Explore building, EV, and waste data at the neighbourhood level, and test simple retrofit and solar scenarios."
 )
 
 # Filters
@@ -290,13 +345,13 @@ st.sidebar.markdown("### 2. Scenario settings")
 retrofit_choice = st.sidebar.slider(
     "Retrofit adoption (%)",
     0, 60, 20,
-    help="Approximate share of buildings that receive energy retrofits."
+    help="Approximate share of buildings that receive energy retrofits (affects gas use)."
 )
 
 solar_choice = st.sidebar.slider(
     "Solar on suitable roofs (%)",
     0, 80, 30,
-    help="Approximate share of suitable roofs with solar installed."
+    help="Approximate share of suitable roofs with solar installed (affects electricity use)."
 )
 
 # Layer toggles
@@ -356,9 +411,17 @@ if w_file is not None:
 # --------------------------------
 
 filtered_buildings = apply_filters(buildings_df, neighbourhood_choice, btype_choice)
-scenario_buildings, total_baseline, total_scenario, reduction, reduction_pct = calculate_scenario(
-    filtered_buildings, retrofit_choice, solar_choice
-)
+(
+    scenario_buildings,
+    total_baseline,
+    total_scenario,
+    reduction,
+    reduction_pct,
+    total_cost_baseline,
+    total_cost_scenario,
+    cost_savings,
+    cost_savings_pct,
+) = calculate_scenario(filtered_buildings, retrofit_choice, solar_choice)
 
 ai_summary = generate_ai_style_summary(
     scenario_buildings,
@@ -376,7 +439,7 @@ ai_summary = generate_ai_style_summary(
 st.title("Community Data – Neighbourhood-level MVP")
 st.markdown(
     "This prototype brings together **buildings**, **EV chargers**, **waste sites**, and **neighbourhood boundaries** "
-    "so that municipal staff can see where emissions come from, test simple scenarios, and generate lightweight reports."
+    "so that municipal staff can see where emissions come from, test simple retrofit and solar scenarios, and generate lightweight reports."
 )
 
 tab1, tab2, tab3, tab4 = st.tabs(
@@ -478,27 +541,28 @@ with tab1:
         layers=layers,
         initial_view_state=view_state,
         tooltip={"text": "{name}"},
-        map_style="mapbox://styles/mapbox/light-v10",
+        map_style="mapbox://styles/mapbox/streets-v11",  # streets with roads/labels
     )
 
     st.pydeck_chart(deck)
 
     st.caption(
-        "Colours: buildings shaded by relative emissions (darker = higher), green points for EV chargers, "
-        "brown points for waste sites, and light polygons for neighbourhood boundaries."
+        "Buildings are shaded by relative emissions (darker = higher). Green points show EV chargers, "
+        "brown points show waste sites, and light polygons outline neighbourhoods. The base map shows streets and context, similar to Google Maps."
     )
 
 # --------------------------------
 # TAB 2 – SCENARIO DASHBOARD
 # --------------------------------
 with tab2:
-    st.subheader("Scenario dashboard – buildings under current filters")
+    st.subheader("Scenario dashboard – emissions and costs under current filters")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Baseline emissions (tCO₂e)", f"{total_baseline:,.1f}")
     col2.metric("Scenario emissions (tCO₂e)", f"{total_scenario:,.1f}")
     col3.metric("Reduction (tCO₂e)", f"{reduction:,.1f}")
     col4.metric("Reduction (%)", f"{reduction_pct:,.1f}%")
+    col5.metric("Annual cost savings ($)", f"{cost_savings:,.0f}")
 
     st.markdown("#### Emissions by building (baseline vs scenario)")
     if not scenario_buildings.empty:
@@ -509,9 +573,10 @@ with tab2:
 
     with st.expander("Assumptions used in this simple scenario model"):
         st.write(
-            "- Retrofits are assumed to cut emissions from affected buildings by about **30%**.\n"
-            "- Solar is assumed to offset about **20%** of electricity-related emissions on participating roofs.\n"
-            "- These assumptions are placeholders and can be tuned to match your real programs."
+            "- Retrofits are assumed to cut **natural gas-related emissions** from affected buildings by about **30%**.\n"
+            "- Solar is assumed to offset about **20%** of **electricity-related emissions** on participating roofs.\n"
+            "- Energy cost assumptions are illustrative only (e.g., about $0.15/kWh for electricity and $0.40/m³ for natural gas). "
+            "These can be updated to match your actual tariffs."
         )
 
 # --------------------------------
@@ -546,6 +611,18 @@ with tab3:
             st.dataframe(waste_df[["name", "neighbourhood", "annual_waste_tonnes", "waste_tco2e"]])
         else:
             st.info("No waste site data available.")
+
+        st.markdown("#### Emissions and cost per neighbourhood")
+        if not scenario_buildings.empty:
+            nh_summary = scenario_buildings.groupby("neighbourhood").agg(
+                baseline_emissions=("baseline_tco2e", "sum"),
+                scenario_emissions=("scenario_tco2e", "sum"),
+                baseline_cost=("baseline_cost", "sum"),
+                scenario_cost=("scenario_cost", "sum"),
+            ).reset_index()
+            st.dataframe(nh_summary)
+        else:
+            st.info("No neighbourhood summary available under current filters.")
 
         st.markdown("#### Narrative summary")
         st.write(ai_summary)
