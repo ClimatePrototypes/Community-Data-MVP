@@ -431,7 +431,7 @@ ai_summary = generate_ai_style_summary(
 # MAIN LAYOUT
 # --------------------------------
 
-st.title("Community Data – Neighbourhood-level MVP (OpenStreetMap)")
+st.title("Community Data – Neighbourhood-level MVP ")
 st.markdown(
     "This prototype uses OpenStreetMap as the basemap and overlays buildings, EV chargers, "
     "waste sites, and neighbourhood boundaries. You can filter by neighbourhood and building type, test simple scenarios, "
