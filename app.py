@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-import pydeck as pdk
+import folium
+from streamlit_folium import st_folium
 from io import BytesIO
 from datetime import datetime
 
@@ -11,7 +12,7 @@ from reportlab.pdfgen import canvas
 # PAGE CONFIG
 # --------------------------------
 st.set_page_config(
-    page_title="Community Data – MVP",
+    page_title="Community Data – MVP (OSM)",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -68,53 +69,53 @@ def get_default_waste_df():
     return pd.DataFrame(waste_data)
 
 
-def get_neighbourhood_polygons_df():
-    polygons = [
+def get_neighbourhood_polygons():
+    # NOTE: folium expects [lat, lon]; earlier we used [lon, lat], so we flip.
+    return [
         {
             "neighbourhood": "Central",
-            "polygon": [
-                [-80.526, 43.464],
-                [-80.516, 43.464],
-                [-80.516, 43.472],
-                [-80.526, 43.472],
+            "coords": [
+                (43.464, -80.526),
+                (43.464, -80.516),
+                (43.472, -80.516),
+                (43.472, -80.526),
             ],
         },
         {
             "neighbourhood": "North",
-            "polygon": [
-                [-80.532, 43.48],
-                [-80.522, 43.48],
-                [-80.522, 43.49],
-                [-80.532, 43.49],
+            "coords": [
+                (43.48, -80.532),
+                (43.48, -80.522),
+                (43.49, -80.522),
+                (43.49, -80.532),
             ],
         },
         {
             "neighbourhood": "South",
-            "polygon": [
-                [-80.52, 43.452],
-                [-80.51, 43.452],
-                [-80.51, 43.46],
-                [-80.52, 43.46],
+            "coords": [
+                (43.452, -80.52),
+                (43.452, -80.51),
+                (43.46, -80.51),
+                (43.46, -80.52),
             ],
         },
         {
             "neighbourhood": "East",
-            "polygon": [
-                [-80.514, 43.46],
-                [-80.504, 43.46],
-                [-80.504, 43.468],
-                [-80.514, 43.468],
+            "coords": [
+                (43.46, -80.514),
+                (43.46, -80.504),
+                (43.468, -80.504),
+                (43.468, -80.514),
             ],
         },
     ]
-    return pd.DataFrame(polygons)
 
 
 # Start with defaults
 buildings_df = get_default_buildings_df()
 ev_df = get_default_ev_df()
 waste_df = get_default_waste_df()
-neighbourhood_df = get_neighbourhood_polygons_df()
+neighbourhood_polygons = get_neighbourhood_polygons()
 
 # --------------------------------
 # HELPER FUNCTIONS
@@ -141,11 +142,9 @@ def calculate_scenario(df, retrofit_pct, solar_pct):
     """
     df = df.copy()
 
-    # default: no energy columns
     df["elec_kwh"] = df.get("elec_kwh", 0).fillna(0)
     df["gas_m3"] = df.get("gas_m3", 0).fillna(0)
 
-    # estimate emission breakdown (gas vs electricity), scaled to match baseline_tco2e
     est_elec = df["elec_kwh"] * ELEC_EMISSION_FACTOR
     est_gas = df["gas_m3"] * GAS_EMISSION_FACTOR
     total_est = est_elec + est_gas
@@ -157,14 +156,11 @@ def calculate_scenario(df, retrofit_pct, solar_pct):
     df.loc[mask, "baseline_elec_t"] = df.loc[mask, "baseline_tco2e"] * (est_elec[mask] / total_est[mask])
     df.loc[mask, "baseline_gas_t"] = df.loc[mask, "baseline_tco2e"] * (est_gas[mask] / total_est[mask])
 
-    # for rows with no energy info, treat all as gas (just so scenarios still run)
     mask_no_energy = ~mask
     df.loc[mask_no_energy, "baseline_gas_t"] = df.loc[mask_no_energy, "baseline_tco2e"]
 
-    # cost baseline
     df["baseline_cost"] = df["elec_kwh"] * ELEC_COST + df["gas_m3"] * GAS_COST
 
-    # scenario adjustments
     retrofit_reduction_factor = 0.30  # on gas emissions
     solar_offset_factor = 0.20        # on electricity emissions
 
@@ -175,7 +171,6 @@ def calculate_scenario(df, retrofit_pct, solar_pct):
     df["scenario_elec_t"] = df["baseline_elec_t"] * elec_factor
     df["scenario_tco2e"] = df["scenario_gas_t"] + df["scenario_elec_t"]
 
-    # scenario costs (same logic applied to energy use)
     df["scenario_cost"] = (
         df["elec_kwh"] * elec_factor * ELEC_COST
         + df["gas_m3"] * gas_factor * GAS_COST
@@ -436,10 +431,11 @@ ai_summary = generate_ai_style_summary(
 # MAIN LAYOUT
 # --------------------------------
 
-st.title("Community Data – Neighbourhood-level MVP")
+st.title("Community Data – Neighbourhood-level MVP (OpenStreetMap)")
 st.markdown(
-    "This prototype brings together **buildings**, **EV chargers**, **waste sites**, and **neighbourhood boundaries** "
-    "so that municipal staff can see where emissions come from, test simple retrofit and solar scenarios, and generate lightweight reports."
+    "This prototype uses **OpenStreetMap** as the basemap (no API key, no extra cost) and overlays buildings, EV chargers, "
+    "waste sites, and neighbourhood boundaries. You can filter by neighbourhood and building type, test simple scenarios, "
+    "and generate lightweight reports."
 )
 
 tab1, tab2, tab3, tab4 = st.tabs(
@@ -447,83 +443,11 @@ tab1, tab2, tab3, tab4 = st.tabs(
 )
 
 # --------------------------------
-# TAB 1 – INTERACTIVE MAP
+# TAB 1 – INTERACTIVE MAP (FOLIUM + OSM)
 # --------------------------------
 with tab1:
-    st.subheader("Interactive map of buildings, EV chargers, waste sites, and neighbourhoods")
+    st.subheader("Interactive OpenStreetMap view")
 
-    layers = []
-
-    # Neighbourhood polygons
-    if show_neighbourhoods:
-        poly_df = neighbourhood_df.copy()
-        poly_layer = pdk.Layer(
-            "PolygonLayer",
-            data=poly_df,
-            get_polygon="polygon",
-            get_fill_color=[220, 220, 220, 60],
-            get_line_color=[120, 120, 120],
-            line_width_min_pixels=1,
-            pickable=True,
-        )
-        layers.append(poly_layer)
-
-    # Building points
-    if show_buildings and not scenario_buildings.empty:
-        max_em = scenario_buildings["baseline_tco2e"].max() or 1
-        scenario_buildings = scenario_buildings.copy()
-        scenario_buildings["color_r"] = (255 * scenario_buildings["baseline_tco2e"] / max_em).clip(80, 255)
-        scenario_buildings["color"] = scenario_buildings["color_r"].apply(
-            lambda v: [int(v), 90, 140, 220]
-        )
-
-        bldg_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=scenario_buildings,
-            get_position=["longitude", "latitude"],
-            get_radius=80,
-            get_fill_color="color",
-            pickable=True,
-        )
-        layers.append(bldg_layer)
-
-    # EV chargers
-    if show_ev:
-        if neighbourhood_choice != "All":
-            ev_filtered = ev_df[ev_df["neighbourhood"] == neighbourhood_choice]
-        else:
-            ev_filtered = ev_df
-
-        if not ev_filtered.empty:
-            ev_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=ev_filtered,
-                get_position=["longitude", "latitude"],
-                get_radius=60,
-                get_fill_color=[0, 160, 0, 220],  # green-ish
-                pickable=True,
-            )
-            layers.append(ev_layer)
-
-    # Waste sites
-    if show_waste:
-        if neighbourhood_choice != "All":
-            waste_filtered = waste_df[waste_df["neighbourhood"] == neighbourhood_choice]
-        else:
-            waste_filtered = waste_df
-
-        if not waste_filtered.empty:
-            waste_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=waste_filtered,
-                get_position=["longitude", "latitude"],
-                get_radius=100,
-                get_fill_color=[170, 90, 40, 230],  # brown-ish
-                pickable=True,
-            )
-            layers.append(waste_layer)
-
-    # Map centre
     if not scenario_buildings.empty:
         center_lat = scenario_buildings["latitude"].mean()
         center_lon = scenario_buildings["longitude"].mean()
@@ -531,24 +455,100 @@ with tab1:
         center_lat = buildings_df["latitude"].mean()
         center_lon = buildings_df["longitude"].mean()
 
-    view_state = pdk.ViewState(
-        latitude=center_lat,
-        longitude=center_lon,
-        zoom=12,
-    )
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles="OpenStreetMap")
 
-    deck = pdk.Deck(
-        layers=layers,
-        initial_view_state=view_state,
-        tooltip={"text": "{name}"},
-        map_style="mapbox://styles/mapbox/streets-v11",  # streets with roads/labels
-    )
+    # Neighbourhood polygons
+    if show_neighbourhoods:
+        for poly in neighbourhood_polygons:
+            coords = poly["coords"]
+            folium.Polygon(
+                locations=coords,
+                color="#666666",
+                weight=1,
+                fill=True,
+                fill_opacity=0.15,
+                popup=f"Neighbourhood: {poly['neighbourhood']}",
+            ).add_to(m)
 
-    st.pydeck_chart(deck)
+    # Buildings
+    if show_buildings and not scenario_buildings.empty:
+        max_em = scenario_buildings["baseline_tco2e"].max() or 1
+        for _, row in scenario_buildings.iterrows():
+            intensity = row["baseline_tco2e"] / max_em
+            r = int(160 + 95 * intensity)
+            g = 90
+            b = 140
+            color = f"#{r:02x}{g:02x}{b:02x}"
 
+            popup = (
+                f"<b>{row['name']}</b><br>"
+                f"Type: {row['building_type']}<br>"
+                f"Neighbourhood: {row['neighbourhood']}<br>"
+                f"Baseline: {row['baseline_tco2e']:.1f} tCO₂e<br>"
+                f"Scenario: {row['scenario_tco2e']:.1f} tCO₂e"
+            )
+
+            folium.CircleMarker(
+                location=[row["latitude"], row["longitude"]],
+                radius=7,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.9,
+                popup=popup,
+            ).add_to(m)
+
+    # EV chargers
+    if show_ev and not ev_df.empty:
+        if neighbourhood_choice != "All":
+            ev_filtered = ev_df[ev_df["neighbourhood"] == neighbourhood_choice]
+        else:
+            ev_filtered = ev_df
+
+        for _, row in ev_filtered.iterrows():
+            popup = (
+                f"<b>{row['name']}</b><br>"
+                f"Neighbourhood: {row['neighbourhood']}<br>"
+                f"Ports: {row['num_ports']}"
+            )
+            folium.CircleMarker(
+                location=[row["latitude"], row["longitude"]],
+                radius=5,
+                color="#008000",
+                fill=True,
+                fill_color="#00a000",
+                fill_opacity=0.9,
+                popup=popup,
+            ).add_to(m)
+
+    # Waste sites
+    if show_waste and not waste_df.empty:
+        if neighbourhood_choice != "All":
+            waste_filtered = waste_df[waste_df["neighbourhood"] == neighbourhood_choice]
+        else:
+            waste_filtered = waste_df
+
+        for _, row in waste_filtered.iterrows():
+            popup = (
+                f"<b>{row['name']}</b><br>"
+                f"Neighbourhood: {row['neighbourhood']}<br>"
+                f"Waste: {row['annual_waste_tonnes']} t/yr<br>"
+                f"Emissions: {row['waste_tco2e']} tCO₂e/yr"
+            )
+            folium.CircleMarker(
+                location=[row["latitude"], row["longitude"]],
+                radius=6,
+                color="#8B4513",
+                fill=True,
+                fill_color="#A0522D",
+                fill_opacity=0.9,
+                popup=popup,
+            ).add_to(m)
+
+    st_data = st_folium(m, width="100%", height=600)
     st.caption(
-        "Buildings are shaded by relative emissions (darker = higher). Green points show EV chargers, "
-        "brown points show waste sites, and light polygons outline neighbourhoods. The base map shows streets and context, similar to Google Maps."
+        "Basemap: OpenStreetMap (free, community-maintained). Purple circles = buildings (darker = higher emissions), "
+        "green circles = EV chargers, brown circles = waste sites, grey polygons = neighbourhoods."
     )
 
 # --------------------------------
