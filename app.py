@@ -433,7 +433,7 @@ ai_summary = generate_ai_style_summary(
 
 st.title("Community Data – Neighbourhood-level MVP (OpenStreetMap)")
 st.markdown(
-    "This prototype uses **OpenStreetMap** as the basemap (no API key, no extra cost) and overlays buildings, EV chargers, "
+    "This prototype uses OpenStreetMap as the basemap and overlays buildings, EV chargers, "
     "waste sites, and neighbourhood boundaries. You can filter by neighbourhood and building type, test simple scenarios, "
     "and generate lightweight reports."
 )
@@ -547,7 +547,7 @@ with tab1:
 
     st_data = st_folium(m, width="100%", height=600)
     st.caption(
-        "Basemap: OpenStreetMap (free, community-maintained). Purple circles = buildings (darker = higher emissions), "
+        "Basemap: OpenStreetMap. Purple circles = buildings (darker = higher emissions), "
         "green circles = EV chargers, brown circles = waste sites, grey polygons = neighbourhoods."
     )
 
